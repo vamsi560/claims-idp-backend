@@ -6,6 +6,7 @@ from typing import Optional, Dict, Any
 class FNOLWorkItemCreate(BaseModel):
     subject: str
     body: str
+    attachment_text: Optional[List[str]] = None
     extracted_fields: Optional[Dict[str, Any]] = None
 
 # Response schema for ORM model

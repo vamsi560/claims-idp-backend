@@ -20,10 +20,19 @@ def get_db():
 
 @router.post("/fnol/", response_model=schemas.FNOLWorkItem)
 def create_fnol(item: schemas.FNOLWorkItemCreate, db: Session = Depends(get_db)):
+    # Always extract fields unless explicitly provided
+    if item.extracted_fields is not None:
+        extracted_fields = item.extracted_fields
+    else:
+        extracted_fields = llm_client.extract_fields_from_email(
+            item.subject,
+            item.body,
+            item.attachment_text
+        )
     db_item = models.FNOLWorkItem(
         email_subject=item.subject,
         email_body=item.body,
-        extracted_fields=item.extracted_fields
+        extracted_fields=extracted_fields
     )
     db.add(db_item)
     db.commit()
