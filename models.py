@@ -8,6 +8,7 @@ Base = declarative_base()
 class FNOLWorkItem(Base):
     __tablename__ = 'fnol_work_items'
     id = Column(Integer, primary_key=True, index=True)
+    message_id = Column(String, nullable=True, index=True, unique=False)  # Set unique=True if always available
     email_subject = Column(String, nullable=False)
     email_body = Column(Text, nullable=False)
     extracted_fields = Column(JSONB)

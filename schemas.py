@@ -3,7 +3,7 @@ import datetime
 from typing import Optional, Dict, Any
 
 
-class FNOLWorkItemCreate(BaseModel):
+    message_id: Optional[str] = None
     subject: str
     body: str
     attachment_text: Optional[List[str]] = None
@@ -12,8 +12,8 @@ class FNOLWorkItemCreate(BaseModel):
 # Response schema for ORM model
 from pydantic import Field
 
-class FNOLWorkItem(BaseModel):
     id: int
+    message_id: Optional[str] = None
     subject: str = Field(..., alias="email_subject")
     body: str = Field(..., alias="email_body")
     extracted_fields: Optional[Dict[str, Any]] = None

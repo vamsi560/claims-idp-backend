@@ -20,6 +20,12 @@ def get_db():
 
 @router.post("/fnol/", response_model=schemas.FNOLWorkItem)
 def create_fnol(item: schemas.FNOLWorkItemCreate, db: Session = Depends(get_db)):
+    # Deduplication: check for existing message_id if provided
+    if item.message_id:
+        existing_item = db.query(models.FNOLWorkItem).filter(models.FNOLWorkItem.message_id == item.message_id).first()
+        if existing_item:
+            return existing_item
+
     # Always extract fields unless explicitly provided
     if item.extracted_fields is not None:
         extracted_fields = item.extracted_fields
@@ -30,6 +36,7 @@ def create_fnol(item: schemas.FNOLWorkItemCreate, db: Session = Depends(get_db))
             item.attachment_text
         )
     db_item = models.FNOLWorkItem(
+        message_id=item.message_id,
         email_subject=item.subject,
         email_body=item.body,
         extracted_fields=extracted_fields
