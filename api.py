@@ -21,8 +21,8 @@ def get_db():
 @router.post("/fnol/", response_model=schemas.FNOLWorkItemCreate)
 def create_fnol(item: schemas.FNOLWorkItemCreate, db: Session = Depends(get_db)):
     db_item = models.FNOLWorkItem(
-        email_subject=item.email_subject,
-        email_body=item.email_body,
+        email_subject=item.subject,
+        email_body=item.body,
         extracted_fields=item.extracted_fields
     )
     db.add(db_item)

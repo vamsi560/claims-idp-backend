@@ -2,8 +2,8 @@ from pydantic import BaseModel
 from typing import Optional, Dict, Any
 
 class FNOLWorkItemCreate(BaseModel):
-    email_subject: str
-    email_body: str
+    subject: str
+    body: str
     extracted_fields: Optional[Dict[str, Any]] = None
 
 class FNOLWorkItemUpdate(BaseModel):
