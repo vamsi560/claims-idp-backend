@@ -18,7 +18,7 @@ def get_db():
     finally:
         db.close()
 
-@router.post("/fnol/", response_model=schemas.FNOLWorkItemCreate)
+@router.post("/fnol/", response_model=schemas.FNOLWorkItem)
 def create_fnol(item: schemas.FNOLWorkItemCreate, db: Session = Depends(get_db)):
     db_item = models.FNOLWorkItem(
         email_subject=item.subject,
@@ -30,7 +30,7 @@ def create_fnol(item: schemas.FNOLWorkItemCreate, db: Session = Depends(get_db))
     db.refresh(db_item)
     return db_item
 
-@router.get("/fnol/", response_model=List[schemas.FNOLWorkItemCreate])
+@router.get("/fnol/", response_model=List[schemas.FNOLWorkItem])
 def list_fnols(db: Session = Depends(get_db)):
     return db.query(models.FNOLWorkItem).all()
 
