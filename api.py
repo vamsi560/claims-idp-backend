@@ -1,7 +1,11 @@
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
-from . import models, schemas, database, azure_blob, llm_client
+import models
+import schemas
+import database
+import azure_blob
+import llm_client
 from typing import List
 
 router = APIRouter()
