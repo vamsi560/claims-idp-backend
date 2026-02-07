@@ -25,8 +25,8 @@ class FNOLWorkItem(BaseModel):
     created_at: Optional[datetime.datetime] = None
 
     class Config:
-        orm_mode = True
-        allow_population_by_field_name = True
+        from_attributes = True
+        validate_by_name = True
 
 class FNOLWorkItemUpdate(BaseModel):
     extracted_fields: Optional[Dict[str, Any]] = None
