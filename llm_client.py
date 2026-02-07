@@ -16,26 +16,28 @@ def extract_fields_from_email(email_subject, email_body, attachment_text=None):
             combined_text += "\n" + str(attachment_text)
 
     # --- LLM PROMPT TEMPLATE ---
+matter: str
+lawsuit_or_complaint_received: bool
     prompt = f'''
 You are an expert insurance claims assistant. Extract the following fields and subfields from the provided email subject, body, and attachment text. Return the result as a JSON object matching this structure:
 
 <FIELDS>
 summary: str
-intent: { intent_type: str, confidence_score: float }
+intent: dict (with keys: intent_type: str, confidence_score: float)
 reported_by_and_main_contact_are_same: bool
-claim_type: { category: str, sub_category: str }
-reporting_contact: { name: str, relationship_to_insured: str, phone: str, email: str, preferred_contact_method: str }
-best_contact: { contact_type: str, name: str, phone: str, email: str }
+claim_type: dict (category: str, sub_category: str)
+reporting_contact: dict (name: str, relationship_to_insured: str, phone: str, email: str, preferred_contact_method: str)
+best_contact: dict (contact_type: str, name: str, phone: str, email: str)
 reply_to_emails: List[str]
-insured: { full_name: str, insured_type: str, phone: str, email: str, address_line1: str, city: str, state: str, postal_code: str }
-claimants: List[{ name: str, claimant_type: str, injury_type: str, phone: str, email: str }]
+insured: dict (full_name: str, insured_type: str, phone: str, email: str, address_line1: str, city: str, state: str, postal_code: str)
+claimants: List[dict (name: str, claimant_type: str, injury_type: str, phone: str, email: str)]
 claimants_count: int
-injured_person_contact: { name: str, injury_severity: str, medical_treatment_received: bool, hospital_name: str }
+injured_person_contact: dict (name: str, injury_severity: str, medical_treatment_received: bool, hospital_name: str)
 plaintiff: str
-policy: { policy_number: str, policy_type: str, line_of_business: str, effective_date: str, expiration_date: str, insurer_name: str, policy_status: str }
-loss: { loss_date: str, loss_time: str, loss_type: str, cause_of_loss: str, description: str, reported_date: str, location_address_line1: str, location_city: str, location_state: str, location_postal_code: str }
+policy: dict (policy_number: str, policy_type: str, line_of_business: str, effective_date: str, expiration_date: str, insurer_name: str, policy_status: str)
+loss: dict (loss_date: str, loss_time: str, loss_type: str, cause_of_loss: str, description: str, reported_date: str, location_address_line1: str, location_city: str, location_state: str, location_postal_code: str)
 matter: str
-acknowledgment: { recipient_name: str, recipient_role: str, delivery_method: str, acknowledgment_sent: bool }
+acknowledgment: dict (recipient_name: str, recipient_role: str, delivery_method: str, acknowledgment_sent: bool)
 lawsuit_or_complaint_received: bool
 </FIELDS>
 
