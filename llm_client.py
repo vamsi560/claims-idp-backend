@@ -9,14 +9,14 @@ def extract_fields_from_email(email_subject, email_body, attachment_text=None):
     """
     # Combine all text sources for extraction
     combined_text = email_subject + "\n" + email_body
+matter: str
+lawsuit_or_complaint_received: bool
     if attachment_text:
         if isinstance(attachment_text, list):
             combined_text += "\n" + "\n".join(attachment_text)
         else:
             combined_text += "\n" + str(attachment_text)
 
-matter: str
-lawsuit_or_complaint_received: bool
     # --- LLM PROMPT TEMPLATE ---
     prompt = f'''
 You are an expert insurance claims assistant. Extract the following fields and subfields from the provided email subject, body, and attachment text. Return the result as a JSON object matching this structure:
