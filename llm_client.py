@@ -15,9 +15,9 @@ def extract_fields_from_email(email_subject, email_body, attachment_text=None):
         else:
             combined_text += "\n" + str(attachment_text)
 
-    # --- LLM PROMPT TEMPLATE ---
 matter: str
 lawsuit_or_complaint_received: bool
+    # --- LLM PROMPT TEMPLATE ---
     prompt = f'''
 You are an expert insurance claims assistant. Extract the following fields and subfields from the provided email subject, body, and attachment text. Return the result as a JSON object matching this structure:
 
@@ -43,11 +43,9 @@ lawsuit_or_complaint_received: bool
 
 If a field is not present, use null or an empty string/list as appropriate. Only use the information in the provided text.
 
----
 Email Subject: {email_subject}
 Email Body: {email_body}
 Attachment Text: {attachment_text if attachment_text else ''}
----
 Return only the JSON object.
 '''
 
