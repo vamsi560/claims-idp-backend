@@ -3,6 +3,11 @@ import datetime
 from typing import Optional, Dict, Any
 
 
+# Request schema for creating FNOL work item
+from typing import List
+from pydantic import Field
+
+class FNOLWorkItemCreate(BaseModel):
     message_id: Optional[str] = None
     subject: str
     body: str
@@ -10,8 +15,7 @@ from typing import Optional, Dict, Any
     extracted_fields: Optional[Dict[str, Any]] = None
 
 # Response schema for ORM model
-from pydantic import Field
-
+class FNOLWorkItem(BaseModel):
     id: int
     message_id: Optional[str] = None
     subject: str = Field(..., alias="email_subject")
