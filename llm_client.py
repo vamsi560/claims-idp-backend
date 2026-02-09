@@ -1,5 +1,14 @@
-# Placeholder for Gemini LLM integration
-# Implement the call to Gemini API to extract FNOL fields from email content
+
+import os
+import requests
+import json
+from dotenv import load_dotenv
+
+load_dotenv()
+
+GEMINI_API_URL = os.getenv("GEMINI_API_URL")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL")
 
 
 def extract_fields_from_email(email_subject, email_body, attachment_text=None):
@@ -47,75 +56,26 @@ Attachment Text: {attachment_text if attachment_text else ''}
 Return only the JSON object.
 '''
 
-    # TODO: Replace the following with a real LLM call using the above prompt and combined_text
-    # For now, return a sample output for UI development
-    return {
-        "summary": "Rear-end collision reported by insured.",
-        "intent": {"intent_type": "FNOL", "confidence_score": 0.98},
-        "reported_by_and_main_contact_are_same": True,
-        "claim_type": {"category": "Auto", "sub_category": "Collision"},
-        "reporting_contact": {
-            "name": "John Doe",
-            "relationship_to_insured": "Self",
-            "phone": "555-1234",
-            "email": "john.doe@email.com",
-            "preferred_contact_method": "Email"
-        },
-        "best_contact": {
-            "contact_type": "Insured",
-            "name": "John Doe",
-            "phone": "555-1234",
-            "email": "john.doe@email.com"
-        },
-        "reply_to_emails": ["reply@email.com"],
-        "insured": {
-            "full_name": "John Doe",
-            "insured_type": "Individual",
-            "phone": "555-1234",
-            "email": "john.doe@email.com",
-            "address_line1": "123 Main St",
-            "city": "Springfield",
-            "state": "IL",
-            "postal_code": "62701"
-        },
-        "claimants": [
-            {"name": "Jane Smith", "claimant_type": "Individual", "injury_type": "Physical", "phone": "555-5678", "email": "jane.smith@email.com"}
-        ],
-        "claimants_count": 1,
-        "injured_person_contact": {
-            "name": "Jane Smith",
-            "injury_severity": "Minor",
-            "medical_treatment_received": False,
-            "hospital_name": ""
-        },
-        "plaintiff": None,
-        "policy": {
-            "policy_number": "A1234567",
-            "policy_type": "Auto",
-            "line_of_business": "Personal Auto",
-            "effective_date": "2024-01-01",
-            "expiration_date": "2025-01-01",
-            "insurer_name": "Acme Insurance",
-            "policy_status": "Active"
-        },
-        "loss": {
-            "loss_date": "2025-12-15",
-            "loss_time": "14:30",
-            "loss_type": "Accident",
-            "cause_of_loss": "Rear-end collision",
-            "description": "Insured was rear-ended at a stoplight.",
-            "reported_date": "2025-12-16",
-            "location_address_line1": "5th & Main St",
-            "location_city": "Springfield",
-            "location_state": "IL",
-            "location_postal_code": "62701"
-        },
-        "matter": None,
-        "acknowledgment": {
-            "recipient_name": "John Doe",
-            "recipient_role": "Insured",
-            "delivery_method": "Email",
-            "acknowledgment_sent": True
-        },
-        "lawsuit_or_complaint_received": False
+    # Call Gemini LLM API
+    headers = {
+        "Content-Type": "application/json",
     }
+    url = f"{GEMINI_API_URL}:generateContent?key={GEMINI_API_KEY}"
+    payload = {
+        "model": GEMINI_MODEL,
+        "contents": [
+            {"role": "user", "parts": [{"text": prompt}]}
+        ]
+    }
+    try:
+        response = requests.post(url, headers=headers, data=json.dumps(payload), timeout=30)
+        response.raise_for_status()
+        result = response.json()
+        # Gemini returns the text in a nested structure; extract JSON from the response
+        text = result["candidates"][0]["content"]["parts"][0]["text"]
+        # Try to parse the JSON object from the LLM response
+        extracted = json.loads(text)
+        return extracted
+    except Exception as e:
+        # Fallback: return error info for debugging
+        return {"error": str(e), "llm_response": result if 'result' in locals() else None}
