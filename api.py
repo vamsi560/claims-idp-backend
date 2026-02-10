@@ -20,6 +20,8 @@ def get_db():
 
 @router.post("/fnol/", response_model=schemas.FNOLWorkItem)
 def create_fnol(item: schemas.FNOLWorkItemCreate, db: Session = Depends(get_db)):
+    print("======================")
+    print(item)
     # Deduplication: check for existing message_id if provided
     if item.message_id:
         existing_item = db.query(models.FNOLWorkItem).filter(models.FNOLWorkItem.message_id == item.message_id).first()
@@ -47,6 +49,7 @@ def create_fnol(item: schemas.FNOLWorkItemCreate, db: Session = Depends(get_db))
 
     # Save attachments from email payload if present
     attachments = []
+    print(attachments)
     if hasattr(item, 'attachments') and item.attachments:
         for att in item.attachments:
             # att should be a dict with at least filename and content (base64 or bytes)
@@ -63,14 +66,22 @@ def create_fnol(item: schemas.FNOLWorkItemCreate, db: Session = Depends(get_db))
                     blob_url=blob_url,
                     doc_type=doc_type
                 )
+                print(attachment)
                 db.add(attachment)
                 db.commit()
                 db.refresh(attachment)
                 attachments.append(attachment)
+                print(attachments)
     # Fetch all attachments for this work item
     all_attachments = db.query(models.Attachment).filter(models.Attachment.workitem_id == db_item.id).all()
+    print(all_attachments)
     db_item.attachments = all_attachments
-    return db_item
+    return {"db_item" : db_item,
+            "item":item,
+            "attachments":attachments,
+            "all_attachments":all_attachments
+           }
+            
 
 @router.get("/fnol/", response_model=List[schemas.FNOLWorkItem])
 def list_fnols(db: Session = Depends(get_db)):
