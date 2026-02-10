@@ -13,6 +13,7 @@ class FNOLWorkItemCreate(BaseModel):
     body: str
     attachment_text: Optional[List[str]] = None
     extracted_fields: Optional[Dict[str, Any]] = None
+    attachments: Optional[List[Dict[str, Any]]] = None
 
 # Response schema for ORM model
 
