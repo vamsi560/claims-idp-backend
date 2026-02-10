@@ -44,11 +44,18 @@ def create_fnol(item: schemas.FNOLWorkItemCreate, db: Session = Depends(get_db))
     db.add(db_item)
     db.commit()
     db.refresh(db_item)
+    # Fetch attachments for this work item
+    attachments = db.query(models.Attachment).filter(models.Attachment.workitem_id == db_item.id).all()
+    db_item.attachments = attachments
     return db_item
 
 @router.get("/fnol/", response_model=List[schemas.FNOLWorkItem])
 def list_fnols(db: Session = Depends(get_db)):
-    return db.query(models.FNOLWorkItem).all()
+    items = db.query(models.FNOLWorkItem).all()
+    for item in items:
+        attachments = db.query(models.Attachment).filter(models.Attachment.workitem_id == item.id).all()
+        item.attachments = attachments
+    return items
 
 @router.post("/attachments/")
 def upload_attachment(workitem_id: int, file: UploadFile = File(...), db: Session = Depends(get_db)):

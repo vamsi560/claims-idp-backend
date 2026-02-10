@@ -15,6 +15,16 @@ class FNOLWorkItemCreate(BaseModel):
     extracted_fields: Optional[Dict[str, Any]] = None
 
 # Response schema for ORM model
+
+class AttachmentOut(BaseModel):
+    id: int
+    filename: str
+    blob_url: str
+    doc_type: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
 class FNOLWorkItem(BaseModel):
     id: int
     message_id: Optional[str] = None
@@ -23,6 +33,7 @@ class FNOLWorkItem(BaseModel):
     extracted_fields: Optional[Dict[str, Any]] = None
     status: Optional[str] = None
     created_at: Optional[datetime.datetime] = None
+    attachments: Optional[list[AttachmentOut]] = []
 
     class Config:
         from_attributes = True
