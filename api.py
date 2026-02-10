@@ -47,6 +47,7 @@ def create_fnol(item: schemas.FNOLWorkItemCreate, db: Session = Depends(get_db))
 
     # Save attachments from email payload if present
     attachments = []
+    print(attachments)
     if hasattr(item, 'attachments') and item.attachments:
         for att in item.attachments:
             # att should be a dict with at least filename and content (base64 or bytes)
@@ -63,12 +64,15 @@ def create_fnol(item: schemas.FNOLWorkItemCreate, db: Session = Depends(get_db))
                     blob_url=blob_url,
                     doc_type=doc_type
                 )
+                print(attachment)
                 db.add(attachment)
                 db.commit()
                 db.refresh(attachment)
                 attachments.append(attachment)
+                print(attachments)
     # Fetch all attachments for this work item
     all_attachments = db.query(models.Attachment).filter(models.Attachment.workitem_id == db_item.id).all()
+    print(all_attachments)
     db_item.attachments = all_attachments
     return db_item
 
