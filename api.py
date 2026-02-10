@@ -44,9 +44,32 @@ def create_fnol(item: schemas.FNOLWorkItemCreate, db: Session = Depends(get_db))
     db.add(db_item)
     db.commit()
     db.refresh(db_item)
-    # Fetch attachments for this work item
-    attachments = db.query(models.Attachment).filter(models.Attachment.workitem_id == db_item.id).all()
-    db_item.attachments = attachments
+
+    # Save attachments from email payload if present
+    attachments = []
+    if hasattr(item, 'attachments') and item.attachments:
+        for att in item.attachments:
+            # att should be a dict with at least filename and content (base64 or bytes)
+            filename = att.get('filename') or att.get('name')
+            content = att.get('contentBytes') or att.get('content')
+            doc_type = att.get('doc_type') or att.get('contentType')
+            if filename and content:
+                import base64
+                file_bytes = base64.b64decode(content)
+                blob_url = azure_blob.upload_attachment(filename, file_bytes)
+                attachment = models.Attachment(
+                    workitem_id=db_item.id,
+                    filename=filename,
+                    blob_url=blob_url,
+                    doc_type=doc_type
+                )
+                db.add(attachment)
+                db.commit()
+                db.refresh(attachment)
+                attachments.append(attachment)
+    # Fetch all attachments for this work item
+    all_attachments = db.query(models.Attachment).filter(models.Attachment.workitem_id == db_item.id).all()
+    db_item.attachments = all_attachments
     return db_item
 
 @router.get("/fnol/", response_model=List[schemas.FNOLWorkItem])
