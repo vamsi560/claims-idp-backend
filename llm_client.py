@@ -73,6 +73,16 @@ Return only the JSON object.
         result = response.json()
         # Gemini returns the text in a nested structure; extract JSON from the response
         text = result["candidates"][0]["content"]["parts"][0]["text"]
+        # Remove Markdown code block if present
+        if text.strip().startswith('```'):
+            text = text.strip()
+            # Remove the first line (```json or ```) and the last line (```)
+            lines = text.splitlines()
+            if lines[0].startswith('```'):
+                lines = lines[1:]
+            if lines and lines[-1].startswith('```'):
+                lines = lines[:-1]
+            text = '\n'.join(lines)
         # Try to parse the JSON object from the LLM response
         extracted = json.loads(text)
         return extracted
