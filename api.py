@@ -53,6 +53,23 @@ def create_fnol(item: schemas.FNOLWorkItemCreate, db: Session = Depends(get_db))
             filename = att.get('filename') or att.get('name')
             content = att.get('contentBytes') or att.get('content')
             doc_type = att.get('doc_type') or att.get('contentType')
+            # Advanced document type detection based on filename
+            if filename:
+                fname_lower = filename.lower()
+                if 'claim' in fname_lower:
+                    doc_type = 'Claim Form'
+                elif 'police' in fname_lower:
+                    doc_type = 'Police Report'
+                elif 'loss' in fname_lower:
+                    doc_type = 'Proof of Loss'
+                elif 'invoice' in fname_lower:
+                    doc_type = 'Invoice'
+                elif 'photo' in fname_lower or 'image' in fname_lower:
+                    doc_type = 'Photo'
+                elif 'id' in fname_lower or 'identity' in fname_lower:
+                    doc_type = 'ID Document'
+                elif not doc_type:
+                    doc_type = 'Other Document'
             if filename and content:
                 import base64
                 file_bytes = base64.b64decode(content)
