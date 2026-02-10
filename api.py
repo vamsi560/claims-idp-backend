@@ -20,6 +20,8 @@ def get_db():
 
 @router.post("/fnol/", response_model=schemas.FNOLWorkItem)
 def create_fnol(item: schemas.FNOLWorkItemCreate, db: Session = Depends(get_db)):
+    print("======================")
+    print(item)
     # Deduplication: check for existing message_id if provided
     if item.message_id:
         existing_item = db.query(models.FNOLWorkItem).filter(models.FNOLWorkItem.message_id == item.message_id).first()
@@ -74,7 +76,12 @@ def create_fnol(item: schemas.FNOLWorkItemCreate, db: Session = Depends(get_db))
     all_attachments = db.query(models.Attachment).filter(models.Attachment.workitem_id == db_item.id).all()
     print(all_attachments)
     db_item.attachments = all_attachments
-    return db_item
+    return {"db_item" : db_item,
+            "item":item,
+            "attachments":attachments,
+            "all_attachments":all_attachments
+           }
+            
 
 @router.get("/fnol/", response_model=List[schemas.FNOLWorkItem])
 def list_fnols(db: Session = Depends(get_db)):
