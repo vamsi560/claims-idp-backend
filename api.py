@@ -7,6 +7,8 @@ import database
 import azure_blob
 import llm_client
 from typing import List
+import mimetypes
+from azure_doc_intel import extract_text_from_bytes
 
 router = APIRouter()
 
@@ -49,30 +51,37 @@ def create_fnol(item: schemas.FNOLWorkItemCreate, db: Session = Depends(get_db))
     attachments = []
     if hasattr(item, 'attachments') and item.attachments:
         for att in item.attachments:
-            # att should be a dict with at least filename and content (base64 or bytes)
             filename = att.get('filename') or att.get('name')
             content = att.get('contentBytes') or att.get('content')
             doc_type = att.get('doc_type') or att.get('contentType')
-            # Advanced document type detection based on filename
-            if filename:
-                fname_lower = filename.lower()
-                if 'claim' in fname_lower:
-                    doc_type = 'Claim Form'
-                elif 'police' in fname_lower:
-                    doc_type = 'Police Report'
-                elif 'loss' in fname_lower:
-                    doc_type = 'Proof of Loss'
-                elif 'invoice' in fname_lower:
-                    doc_type = 'Invoice'
-                elif 'photo' in fname_lower or 'image' in fname_lower:
-                    doc_type = 'Photo'
-                elif 'id' in fname_lower or 'identity' in fname_lower:
-                    doc_type = 'ID Document'
-                elif not doc_type:
-                    doc_type = 'Other Document'
             if filename and content:
                 import base64
                 file_bytes = base64.b64decode(content)
+                mime_type, _ = mimetypes.guess_type(filename)
+                # If image, use Azure Document Intelligence OCR for text extraction
+                extracted_text = None
+                if mime_type in ['image/png', 'image/jpeg', 'image/jpg']:
+                    try:
+                        extracted_text = extract_text_from_bytes(file_bytes, mime_type)
+                    except Exception as e:
+                        extracted_text = None
+                # Document type detection using filename and OCR text
+                fname_lower = filename.lower() if filename else ''
+                text_for_detection = (extracted_text or '') + ' ' + fname_lower
+                if 'claim' in text_for_detection:
+                    doc_type = 'Claim Form'
+                elif 'police' in text_for_detection:
+                    doc_type = 'Police Report'
+                elif 'loss' in text_for_detection:
+                    doc_type = 'Proof of Loss'
+                elif 'invoice' in text_for_detection:
+                    doc_type = 'Invoice'
+                elif 'photo' in text_for_detection or 'image' in text_for_detection:
+                    doc_type = 'Photo'
+                elif 'id' in text_for_detection or 'identity' in text_for_detection:
+                    doc_type = 'ID Document'
+                elif not doc_type:
+                    doc_type = 'Other Document'
                 blob_url = azure_blob.upload_attachment(filename, file_bytes)
                 attachment = models.Attachment(
                     workitem_id=db_item.id,

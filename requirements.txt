@@ -6,3 +6,7 @@ python-dotenv
 azure-storage-blob
 requests
 python-multipart
+
+# Azure Document Intelligence and OCR
+azure-ai-documentintelligence
+pillow
