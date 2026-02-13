@@ -129,15 +129,6 @@ def create_fnol(item: schemas.FNOLWorkItemCreate, db: Session = Depends(get_db))
         status=db_item.status,
         attachments=attachments_out
     )
-        for att in item.attachments:
-            filename = att.get('filename') or att.get('name')
-            content = att.get('contentBytes') or att.get('content')
-            doc_type = att.get('doc_type') or att.get('contentType')
-            if filename and content:
-                # Deduplication: check if attachment already exists for this workitem and filename
-                existing_attachment = db.query(models.Attachment).filter_by(workitem_id=db_item.id, filename=filename).first()
-                if existing_attachment:
-                    attachments.append(existing_attachment)
                     continue
                 import base64
                 file_bytes = base64.b64decode(content)
