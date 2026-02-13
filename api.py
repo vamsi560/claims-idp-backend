@@ -103,11 +103,19 @@ def create_fnol(item: schemas.FNOLWorkItemCreate, db: Session = Depends(get_db))
             doc_type=a.doc_type
         ) for a in all_attachments
     ]
-    return schemas.FNOLWorkItem(
         id=db_item.id,
         message_id=db_item.message_id,
         subject=db_item.email_subject,
     # Save attachments from email payload if present
+    return schemas.FNOLWorkItem(
+        id=db_item.id,
+        message_id=db_item.message_id,
+        subject=db_item.email_subject,
+        body=db_item.email_body,
+        extracted_fields=db_item.extracted_fields,
+        status=db_item.status,
+        attachments=attachments_out
+    )
     attachments = []
     if hasattr(item, 'attachments') and item.attachments:
         for att in item.attachments:
@@ -187,16 +195,6 @@ def list_fnols(db: Session = Depends(get_db)):
         attachments = db.query(models.Attachment).filter(models.Attachment.workitem_id == item.id).all()
         item.attachments = attachments
     return items
-
-@router.get("/fnol/{id}/", response_model=schemas.FNOLWorkItem)
-def get_fnol(id : int, db: Session = Depends(get_db)):
-
-    item = db.query(models.FNOLWorkItem).filter(models.FNOLWorkItem.id == id).first()
-    attachment = db.query(models.Attachment).filter(models.Attachment.workitem_id == item.id).first()
-    item.attachments = [attachment] if attachment else []
-    if not item:
-        raise HTTPException(status_code=404, detail="FNOL work item not found")
-    return item
 
 @router.post("/attachments/")
 def upload_attachment(workitem_id: int, file: UploadFile = File(...), db: Session = Depends(get_db)):
