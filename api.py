@@ -129,15 +129,6 @@ def create_fnol(item: schemas.FNOLWorkItemCreate, db: Session = Depends(get_db))
         status=db_item.status,
         attachments=attachments_out
     )
-                    doc_type = 'Police Report'
-                elif 'loss' in text_for_detection:
-                    doc_type = 'Proof of Loss'
-                elif 'invoice' in text_for_detection:
-                    doc_type = 'Invoice'
-                elif 'photo' in text_for_detection or 'image' in text_for_detection:
-                    doc_type = 'Photo'
-                elif 'id' in text_for_detection or 'identity' in text_for_detection:
-                    doc_type = 'ID Document'
                 elif not doc_type:
                     doc_type = 'Other Document'
                 blob_url = azure_blob.upload_attachment(filename, file_bytes)
