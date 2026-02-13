@@ -95,7 +95,6 @@ def create_fnol(item: schemas.FNOLWorkItemCreate, db: Session = Depends(get_db))
     # Fetch all attachments for this work item
     all_attachments = db.query(models.Attachment).filter(models.Attachment.workitem_id == db_item.id).all()
     # Convert attachments to Pydantic models
-    attachments_out = [
         schemas.AttachmentOut(
             id=a.id,
             filename=a.filename,
@@ -108,6 +107,23 @@ def create_fnol(item: schemas.FNOLWorkItemCreate, db: Session = Depends(get_db))
         subject=db_item.email_subject,
     # Save attachments from email payload if present
     return schemas.FNOLWorkItem(
+    attachments_out = [
+        schemas.AttachmentOut(
+            id=a.id,
+            filename=a.filename,
+            blob_url=a.blob_url,
+            doc_type=a.doc_type
+        ) for a in all_attachments
+    ]
+    return schemas.FNOLWorkItem(
+        id=db_item.id,
+        message_id=db_item.message_id,
+        subject=db_item.email_subject,
+        body=db_item.email_body,
+        extracted_fields=db_item.extracted_fields,
+        status=db_item.status,
+        attachments=attachments_out
+    )
         id=db_item.id,
         message_id=db_item.message_id,
         subject=db_item.email_subject,
