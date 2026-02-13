@@ -129,18 +129,6 @@ def create_fnol(item: schemas.FNOLWorkItemCreate, db: Session = Depends(get_db))
         status=db_item.status,
         attachments=attachments_out
     )
-        message_id=db_item.message_id,
-        subject=db_item.email_subject,
-    # Save attachments from email payload if present
-    return schemas.FNOLWorkItem(
-    attachments_out = [
-        schemas.AttachmentOut(
-            id=a.id,
-            filename=a.filename,
-            blob_url=a.blob_url,
-            doc_type=a.doc_type
-        ) for a in all_attachments
-    ]
     return schemas.FNOLWorkItem(
         id=db_item.id,
         message_id=db_item.message_id,
