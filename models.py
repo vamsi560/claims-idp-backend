@@ -1,4 +1,6 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime
+from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey
+from sqlalchemy.orm import relationship
+from sqlalchemy import UniqueConstraint, BigInteger
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
@@ -15,11 +17,18 @@ class FNOLWorkItem(Base):
     extracted_fields = Column(JSONB)
     status = Column(String, default='pending')
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    attachments = relationship('Attachment', back_populates='workitem', cascade='all, delete-orphan')
 
 class Attachment(Base):
     __tablename__ = 'attachments'
     id = Column(Integer, primary_key=True, index=True)
-    workitem_id = Column(Integer)
+    workitem_id = Column(Integer, ForeignKey('fnol_work_items.id', ondelete='CASCADE'), nullable=False, index=True)
     filename = Column(String)
     blob_url = Column(String)
     doc_type = Column(String)
+    uploaded_at = Column(DateTime, default=datetime.datetime.utcnow)
+    uploader = Column(String, nullable=True)
+    file_size = Column(BigInteger, nullable=True)
+    mime_type = Column(String, nullable=True)
+    workitem = relationship('FNOLWorkItem', back_populates='attachments')
+    __table_args__ = (UniqueConstraint('workitem_id', 'filename', name='uix_workitem_filename'),)
