@@ -129,14 +129,6 @@ def create_fnol(item: schemas.FNOLWorkItemCreate, db: Session = Depends(get_db))
         status=db_item.status,
         attachments=attachments_out
     )
-                    except Exception as e:
-                        extracted_text = None
-                # Document type detection using filename and OCR text
-                fname_lower = filename.lower() if filename else ''
-                text_for_detection = (extracted_text or '') + ' ' + fname_lower
-                if 'claim' in text_for_detection:
-                    doc_type = 'Claim Form'
-                elif 'police' in text_for_detection:
                     doc_type = 'Police Report'
                 elif 'loss' in text_for_detection:
                     doc_type = 'Proof of Loss'
