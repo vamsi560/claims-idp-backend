@@ -129,15 +129,6 @@ def create_fnol(item: schemas.FNOLWorkItemCreate, db: Session = Depends(get_db))
         status=db_item.status,
         attachments=attachments_out
     )
-                    continue
-                import base64
-                file_bytes = base64.b64decode(content)
-                mime_type, _ = mimetypes.guess_type(filename)
-                # If image, use Azure Document Intelligence OCR for text extraction
-                extracted_text = None
-                if mime_type in ['image/png', 'image/jpeg', 'image/jpg']:
-                    try:
-                        extracted_text = extract_text_from_bytes(file_bytes, mime_type)
                     except Exception as e:
                         extracted_text = None
                 # Document type detection using filename and OCR text
