@@ -129,25 +129,6 @@ def create_fnol(item: schemas.FNOLWorkItemCreate, db: Session = Depends(get_db))
         status=db_item.status,
         attachments=attachments_out
     )
-    return schemas.FNOLWorkItem(
-        id=db_item.id,
-        message_id=db_item.message_id,
-        subject=db_item.email_subject,
-        body=db_item.email_body,
-        extracted_fields=db_item.extracted_fields,
-        status=db_item.status,
-        attachments=attachments_out
-    )
-        id=db_item.id,
-        message_id=db_item.message_id,
-        subject=db_item.email_subject,
-        body=db_item.email_body,
-        extracted_fields=db_item.extracted_fields,
-        status=db_item.status,
-        attachments=attachments_out
-    )
-    attachments = []
-    if hasattr(item, 'attachments') and item.attachments:
         for att in item.attachments:
             filename = att.get('filename') or att.get('name')
             content = att.get('contentBytes') or att.get('content')
