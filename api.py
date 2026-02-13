@@ -111,37 +111,6 @@ def create_fnol(item: schemas.FNOLWorkItemCreate, db: Session = Depends(get_db))
         status=db_item.status,
         attachments=attachments_out
     )
-    all_attachments = db.query(models.Attachment).filter(models.Attachment.workitem_id == db_item.id).all()
-    attachments_out = [
-        schemas.AttachmentOut(
-            id=a.id,
-            filename=a.filename,
-            blob_url=a.blob_url,
-            doc_type=a.doc_type
-        ) for a in all_attachments
-    ]
-    return schemas.FNOLWorkItem(
-        id=db_item.id,
-        message_id=db_item.message_id,
-        subject=db_item.email_subject,
-        body=db_item.email_body,
-        extracted_fields=db_item.extracted_fields,
-        status=db_item.status,
-        attachments=attachments_out
-    )
-                elif not doc_type:
-                    doc_type = 'Other Document'
-                blob_url = azure_blob.upload_attachment(filename, file_bytes)
-                attachment = models.Attachment(
-                    workitem_id=db_item.id,
-                    filename=filename,
-                    blob_url=blob_url,
-                    doc_type=doc_type
-                )
-                db.add(attachment)
-                db.commit()
-                db.refresh(attachment)
-                attachments.append(attachment)
     # Fetch all attachments for this work item
     all_attachments = db.query(models.Attachment).filter(models.Attachment.workitem_id == db_item.id).all()
     # Convert attachments to Pydantic models
