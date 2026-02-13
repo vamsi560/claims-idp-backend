@@ -188,6 +188,16 @@ def list_fnols(db: Session = Depends(get_db)):
         item.attachments = attachments
     return items
 
+@router.get("/fnol/{id}/", response_model=schemas.FNOLWorkItem)
+def get_fnol(id : int, db: Session = Depends(get_db)):
+
+    item = db.query(models.FNOLWorkItem).filter(models.FNOLWorkItem.id == id).first()
+    attachment = db.query(models.Attachment).filter(models.Attachment.workitem_id == item.id).first()
+    item.attachments = [attachment] if attachment else []
+    if not item:
+        raise HTTPException(status_code=404, detail="FNOL work item not found")
+    return item
+
 @router.post("/attachments/")
 def upload_attachment(workitem_id: int, file: UploadFile = File(...), db: Session = Depends(get_db)):
     blob_url = azure_blob.upload_attachment(file.filename, file.file)

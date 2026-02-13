@@ -3,6 +3,7 @@ from sqlalchemy.orm import relationship
 from sqlalchemy import UniqueConstraint, BigInteger
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.orm import relationship
 import datetime
 
 Base = declarative_base()
