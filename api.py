@@ -92,18 +92,8 @@ def create_fnol(item: schemas.FNOLWorkItemCreate, db: Session = Depends(get_db))
                 db.commit()
                 db.refresh(attachment)
                 attachments.append(attachment)
-    # Convert attachments to Pydantic models
-        schemas.AttachmentOut(
-            id=a.id,
-            filename=a.filename,
-            blob_url=a.blob_url,
-            doc_type=a.doc_type
-        ) for a in all_attachments
-    ]
-        id=db_item.id,
     # Fetch all attachments for this work item
     all_attachments = db.query(models.Attachment).filter(models.Attachment.workitem_id == db_item.id).all()
-    # Convert attachments to Pydantic models
     attachments_out = [
         schemas.AttachmentOut(
             id=a.id,
