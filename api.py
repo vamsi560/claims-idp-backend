@@ -1,3 +1,41 @@
+from sqlalchemy import func, case
+# --- Analytics Endpoints ---
+@router.get("/analytics/claims-summary")
+def claims_summary(db: Session = Depends(get_db)):
+    # Claims by status
+    status_counts = db.query(models.FNOLWorkItem.status, func.count(models.FNOLWorkItem.id)).group_by(models.FNOLWorkItem.status).all()
+    # Claims by type (from attachments' doc_type)
+    type_counts = db.query(models.Attachment.doc_type, func.count(models.Attachment.id)).group_by(models.Attachment.doc_type).all()
+    # Average processing time (from created_at to now or to closed/approved)
+    avg_processing_time = db.query(
+        func.avg(
+            case(
+                (
+                    models.FNOLWorkItem.status.in_(["approved", "closed", "completed"]),
+                    func.extract('epoch', func.now() - models.FNOLWorkItem.created_at)
+                ),
+                else_=func.extract('epoch', func.now() - models.FNOLWorkItem.created_at)
+            )
+        )
+    ).scalar()
+    return {
+        "claims_by_status": {status: count for status, count in status_counts},
+        "claims_by_type": {doc_type or "Unknown": count for doc_type, count in type_counts},
+        "average_processing_time_seconds": avg_processing_time or 0
+    }
+
+@router.get("/analytics/claims-trend")
+def claims_trend(db: Session = Depends(get_db), days: int = 30):
+    # Claims per day for the last N days
+    from sqlalchemy import cast, Date
+    import datetime
+    cutoff = datetime.datetime.utcnow() - datetime.timedelta(days=days)
+    trend = db.query(
+        cast(models.FNOLWorkItem.created_at, Date).label('date'),
+        func.count(models.FNOLWorkItem.id)
+    ).filter(models.FNOLWorkItem.created_at >= cutoff)
+    trend = trend.group_by('date').order_by('date').all()
+    return [{"date": str(date), "count": count} for date, count in trend]
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
