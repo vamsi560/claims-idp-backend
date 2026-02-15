@@ -1,6 +1,15 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+
 from sqlalchemy import func, case
 router = APIRouter()
+# Dependency
+def get_db():
+    db = database.SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
 # --- Analytics Endpoints ---
 @router.get("/analytics/claims-summary")
 def claims_summary(db: Session = Depends(get_db)):
