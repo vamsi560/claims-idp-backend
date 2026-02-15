@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 
 from sqlalchemy import func, case
+from sqlalchemy.orm import Session
 router = APIRouter()
 # Dependency
 def get_db():
@@ -47,7 +48,7 @@ def claims_trend(db: Session = Depends(get_db), days: int = 30):
     ).filter(models.FNOLWorkItem.created_at >= cutoff)
     trend = trend.group_by('date').order_by('date').all()
     return [{"date": str(date), "count": count} for date, count in trend]
-from sqlalchemy.orm import Session
+ # (removed duplicate import)
 import models
 import schemas
 import database
