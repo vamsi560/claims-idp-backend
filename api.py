@@ -1,4 +1,6 @@
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy import func, case
+router = APIRouter()
 # --- Analytics Endpoints ---
 @router.get("/analytics/claims-summary")
 def claims_summary(db: Session = Depends(get_db)):
@@ -36,8 +38,6 @@ def claims_trend(db: Session = Depends(get_db), days: int = 30):
     ).filter(models.FNOLWorkItem.created_at >= cutoff)
     trend = trend.group_by('date').order_by('date').all()
     return [{"date": str(date), "count": count} for date, count in trend]
-
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
 import models
 import schemas
