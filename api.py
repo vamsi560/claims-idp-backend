@@ -57,15 +57,6 @@ from typing import List
 import mimetypes
 from azure_doc_intel import extract_text_from_bytes
 
-router = APIRouter()
-
-# Dependency
-def get_db():
-    db = database.SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 @router.post("/fnol/", response_model=schemas.FNOLWorkItem)
 def create_fnol(item: schemas.FNOLWorkItemCreate, db: Session = Depends(get_db)):
