@@ -91,21 +91,36 @@ def create_fnol(item: schemas.FNOLWorkItemCreate, db: Session = Depends(get_db))
         for att in item.attachments:
             filename = att.get('filename') or att.get('name')
             content = att.get('contentBytes') or att.get('content')
-            doc_type = att.get('doc_type') or att.get('contentType')
+            # Only use doc_type from request if it is a business type, not a MIME type
+            doc_type = att.get('doc_type')
             if filename and content:
+                # Deduplication: skip if attachment with same filename exists for this work item
+                existing_attachment = db.query(models.Attachment).filter_by(workitem_id=db_item.id, filename=filename).first()
+                if existing_attachment:
+                    continue
                 import base64
                 file_bytes = base64.b64decode(content)
                 mime_type, _ = mimetypes.guess_type(filename)
-                # If image, use Azure Document Intelligence OCR for text extraction
                 extracted_text = None
+                # Use ADI for images and PDFs, fallback to LLM for PDFs if ADI fails
                 if mime_type in ['image/png', 'image/jpeg', 'image/jpg']:
                     try:
                         extracted_text = extract_text_from_bytes(file_bytes, mime_type)
-                    except Exception as e:
+                    except Exception:
                         extracted_text = None
-                # Document type detection using filename and OCR text
+                elif mime_type == 'application/pdf':
+                    try:
+                        extracted_text = extract_text_from_bytes(file_bytes, mime_type)
+                    except Exception:
+                        # Fallback: use LLM if ADI fails
+                        try:
+                            extracted_text = llm_client.extract_text_from_pdf_bytes(file_bytes)
+                        except Exception:
+                            extracted_text = None
+                # Document type detection using filename and extracted text
                 fname_lower = filename.lower() if filename else ''
                 text_for_detection = (extracted_text or '') + ' ' + fname_lower
+                # Business logic for document type
                 if 'claim' in text_for_detection:
                     doc_type = 'Claim Form'
                 elif 'police' in text_for_detection:
@@ -114,6 +129,8 @@ def create_fnol(item: schemas.FNOLWorkItemCreate, db: Session = Depends(get_db))
                     doc_type = 'Proof of Loss'
                 elif 'invoice' in text_for_detection:
                     doc_type = 'Invoice'
+                elif 'declaration' in text_for_detection:
+                    doc_type = 'Declaration'
                 elif 'photo' in text_for_detection or 'image' in text_for_detection:
                     doc_type = 'Photo'
                 elif 'id' in text_for_detection or 'identity' in text_for_detection:
