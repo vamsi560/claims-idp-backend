@@ -18,6 +18,7 @@ class FNOLWorkItem(Base):
     status = Column(String, default='pending')
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     attachments = relationship('Attachment', back_populates='workitem', cascade='all, delete-orphan')
+    tag = Column(Text)
 
 class Attachment(Base):
     __tablename__ = 'attachments'

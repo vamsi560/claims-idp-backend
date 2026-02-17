@@ -29,6 +29,7 @@ class AttachmentOut(BaseModel):
 class FNOLWorkItem(BaseModel):
     id: int
     message_id: Optional[str] = None
+    tag: Optional[str] = None
     subject: str = Field(..., alias="email_subject")
     body: str = Field(..., alias="email_body")
     extracted_fields: Optional[Dict[str, Any]] = None

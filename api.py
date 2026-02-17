@@ -79,7 +79,8 @@ def create_fnol(item: schemas.FNOLWorkItemCreate, db: Session = Depends(get_db))
         message_id=item.message_id,
         email_subject=item.subject,
         email_body=item.body,
-        extracted_fields=extracted_fields
+        extracted_fields=extracted_fields,
+        tag=extracted_fields['claim_type']['category']
     )
     db.add(db_item)
     db.commit()
