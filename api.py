@@ -64,7 +64,24 @@ def create_fnol(item: schemas.FNOLWorkItemCreate, db: Session = Depends(get_db))
     if item.message_id:
         existing_item = db.query(models.FNOLWorkItem).filter(models.FNOLWorkItem.message_id == item.message_id).first()
         if existing_item:
-            return existing_item
+            all_attachments = db.query(models.Attachment).filter(models.Attachment.workitem_id == existing_item.id).all()
+            attachments_out = [
+                schemas.AttachmentOut(
+                    id=a.id,
+                    filename=a.filename,
+                    blob_url=a.blob_url,
+                    doc_type=a.doc_type
+                ) for a in all_attachments
+            ]
+            return schemas.FNOLWorkItem(
+                id=existing_item.id,
+                message_id=existing_item.message_id,
+                email_subject=existing_item.email_subject,
+                email_body=existing_item.email_body,
+                extracted_fields=existing_item.extracted_fields,
+                status=existing_item.status,
+                attachments=attachments_out
+            )
 
     # Step 1: Extract text from all attachments
     import base64
