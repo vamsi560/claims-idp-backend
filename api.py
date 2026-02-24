@@ -66,15 +66,48 @@ def create_fnol(item: schemas.FNOLWorkItemCreate, db: Session = Depends(get_db))
         if existing_item:
             return existing_item
 
-    # Always extract fields unless explicitly provided
+    # Step 1: Extract text from all attachments
+    import base64
+    extracted_texts = []
+    attachment_data = []
+    
+    if hasattr(item, 'attachments') and item.attachments:
+        for att in item.attachments:
+            filename = att.get('filename') or att.get('name')
+            content = att.get('contentBytes') or att.get('content')
+            if filename and content:
+                file_bytes = base64.b64decode(content)
+                mime_type, _ = mimetypes.guess_type(filename)
+                extracted_text = None
+                
+                if mime_type in ['image/png', 'image/jpeg', 'image/jpg', 'application/pdf']:
+                    try:
+                        extracted_text = extract_text_from_bytes(file_bytes, mime_type)
+                    except Exception:
+                        extracted_text = None
+                
+                if extracted_text:
+                    extracted_texts.append(extracted_text)
+                
+                attachment_data.append({
+                    'filename': filename,
+                    'file_bytes': file_bytes,
+                    'mime_type': mime_type,
+                    'extracted_text': extracted_text
+                })
+    
+    # Step 2: Pass extracted text to LLM for field extraction
+    combined_attachment_text = '\n\n'.join(extracted_texts) if extracted_texts else ''
     if item.extracted_fields is not None:
         extracted_fields = item.extracted_fields
     else:
         extracted_fields = llm_client.extract_fields_from_email(
             item.subject,
             item.body,
-            item.attachment_text
+            combined_attachment_text
         )
+    
+    # Step 3: Create FNOL work item
     db_item = models.FNOLWorkItem(
         message_id=item.message_id,
         email_subject=item.subject,
@@ -86,69 +119,45 @@ def create_fnol(item: schemas.FNOLWorkItemCreate, db: Session = Depends(get_db))
     db.commit()
     db.refresh(db_item)
 
-    attachments = []
-    if hasattr(item, 'attachments') and item.attachments:
-        for att in item.attachments:
-            filename = att.get('filename') or att.get('name')
-            content = att.get('contentBytes') or att.get('content')
-            # Only use doc_type from request if it is a business type, not a MIME type
-            doc_type = att.get('doc_type')
-            if filename and content:
-                # Deduplication: skip if attachment with same filename exists for this work item
-                existing_attachment = db.query(models.Attachment).filter_by(workitem_id=db_item.id, filename=filename).first()
-                if existing_attachment:
-                    continue
-                import base64
-                file_bytes = base64.b64decode(content)
-                mime_type, _ = mimetypes.guess_type(filename)
-                extracted_text = None
-                # Use ADI for images and PDFs, fallback to LLM for PDFs if ADI fails
-                if mime_type in ['image/png', 'image/jpeg', 'image/jpg']:
-                    try:
-                        extracted_text = extract_text_from_bytes(file_bytes, mime_type)
-                    except Exception:
-                        extracted_text = None
-                elif mime_type == 'application/pdf':
-                    try:
-                        extracted_text = extract_text_from_bytes(file_bytes, mime_type)
-                    except Exception:
-                        # Fallback: use LLM if ADI fails
-                        try:
-                            extracted_text = llm_client.extract_text_from_pdf_bytes(file_bytes)
-                        except Exception:
-                            extracted_text = None
-                # Document type detection using filename and extracted text
-                fname_lower = filename.lower() if filename else ''
-                text_for_detection = (extracted_text or '') + ' ' + fname_lower
-                # Business logic for document type
-                if 'claim' in text_for_detection:
-                    doc_type = 'Claim Form'
-                elif 'police' in text_for_detection:
-                    doc_type = 'Police Report'
-                elif 'loss' in text_for_detection:
-                    doc_type = 'Proof of Loss'
-                elif 'invoice' in text_for_detection:
-                    doc_type = 'Invoice'
-                elif 'declaration' in text_for_detection:
-                    doc_type = 'Declaration'
-                elif 'photo' in text_for_detection or 'image' in text_for_detection:
-                    doc_type = 'Photo'
-                elif 'id' in text_for_detection or 'identity' in text_for_detection:
-                    doc_type = 'ID Document'
-                elif not doc_type:
-                    doc_type = 'Other Document'
-                blob_url = azure_blob.upload_attachment(filename, file_bytes)
-                attachment = models.Attachment(
-                    workitem_id=db_item.id,
-                    filename=filename,
-                    blob_url=blob_url,
-                    doc_type=doc_type
-                )
-                db.add(attachment)
-                db.commit()
-                db.refresh(attachment)
-                attachments.append(attachment)
-    # Fetch all attachments for this work item
+    # Step 4: Store attachments in DB
+    for att_data in attachment_data:
+        filename = att_data['filename']
+        existing_attachment = db.query(models.Attachment).filter_by(workitem_id=db_item.id, filename=filename).first()
+        if existing_attachment:
+            continue
+        
+        fname_lower = filename.lower()
+        text_for_detection = (att_data['extracted_text'] or '') + ' ' + fname_lower
+        
+        if 'claim' in text_for_detection:
+            doc_type = 'Claim Form'
+        elif 'police' in text_for_detection:
+            doc_type = 'Police Report'
+        elif 'loss' in text_for_detection:
+            doc_type = 'Proof of Loss'
+        elif 'invoice' in text_for_detection:
+            doc_type = 'Invoice'
+        elif 'declaration' in text_for_detection:
+            doc_type = 'Declaration'
+        elif 'photo' in text_for_detection or 'image' in text_for_detection:
+            doc_type = 'Photo'
+        elif 'id' in text_for_detection or 'identity' in text_for_detection:
+            doc_type = 'ID Document'
+        else:
+            doc_type = 'Other Document'
+        
+        blob_url = azure_blob.upload_attachment(filename, att_data['file_bytes'])
+        attachment = models.Attachment(
+            workitem_id=db_item.id,
+            filename=filename,
+            blob_url=blob_url,
+            doc_type=doc_type
+        )
+        db.add(attachment)
+    
+    db.commit()
+    
+    # Fetch all attachments for response
     all_attachments = db.query(models.Attachment).filter(models.Attachment.workitem_id == db_item.id).all()
     attachments_out = [
         schemas.AttachmentOut(
@@ -158,34 +167,14 @@ def create_fnol(item: schemas.FNOLWorkItemCreate, db: Session = Depends(get_db))
             doc_type=a.doc_type
         ) for a in all_attachments
     ]
+    
     return schemas.FNOLWorkItem(
         id=db_item.id,
         message_id=db_item.message_id,
-        subject=db_item.email_subject,
-        body=db_item.email_body,
+        email_subject=db_item.email_subject,
+        email_body=db_item.email_body,
         extracted_fields=db_item.extracted_fields,
         status=db_item.status,
-        attachments=attachments_out
-    )
-    # Fetch all attachments for this work item
-    all_attachments = db.query(models.Attachment).filter(models.Attachment.workitem_id == db_item.id).all()
-    # Convert attachments to Pydantic models
-    attachments_out = [
-        schemas.AttachmentOut(
-            id=a.id,
-            filename=a.filename,
-            blob_url=a.blob_url,
-            doc_type=a.doc_type
-        ) for a in all_attachments
-    ]
-    return schemas.FNOLWorkItem(
-        id=db_item.id,
-        message_id=db_item.message_id,
-        subject=db_item.email_subject,
-        body=db_item.email_body,
-        extracted_fields=db_item.extracted_fields,
-        status=db_item.status,
-        created_at=db_item.created_at,
         attachments=attachments_out
     )
 
