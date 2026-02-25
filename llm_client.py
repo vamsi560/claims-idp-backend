@@ -4,6 +4,7 @@ import requests
 import json
 from dotenv import load_dotenv
 
+
 load_dotenv()
 
 GEMINI_API_URL = os.getenv("GEMINI_API_URL")
@@ -89,3 +90,61 @@ Return only the JSON object.
     except Exception as e:
         # Fallback: return error info for debugging
         return {"error": str(e), "llm_response": result if 'result' in locals() else None}
+
+
+def guess_doc_type(data: str):
+    prompt = f"""
+    You are a document classification assistant.
+
+    Your task is to determine the document type based only on the provided text content.
+
+    Classify the document into one of the following categories only:
+
+    - Claim Form
+    - Police Report
+    - Proof of Loss
+    - Invoice
+    - Declaration
+    - Photo
+    - ID Document
+    - Other Document
+
+    Classification Rules:
+    - Claim Form → Contains insurance claim details, claim number, policy number, claimant information, incident description.
+    - Police Report → Contains police department references, officer names, badge numbers, case/report numbers, incident reports.
+    - Proof of Loss → Contains statements of loss, damage valuation, sworn loss statements, insurance loss summaries.
+    - Invoice → Contains billing details, invoice number, line items, totals, payment terms.
+    - Declaration → Contains formal statements affirming truth, signatures under penalty, sworn declarations.
+    - Photo → Mentions image/photo metadata or indicates the content is a photograph.
+    - ID Document → Contains identity details such as name, date of birth, ID number, license/passport details.
+
+    If none clearly apply, return: Other Document.
+
+    Instructions:
+    - Base your answer strictly on the text content.
+    - Do not guess beyond the provided text.
+    - Return only the document type label.
+    - Do not provide explanations.
+
+    Input Text:
+    \"\"\"
+    {data}
+    \"\"\"
+
+    Output:
+    """
+
+    headers = {"Content-Type": "application/json"}
+    url = f"{GEMINI_API_URL}:generateContent?key={GEMINI_API_KEY}"
+    payload = {
+        "model": GEMINI_MODEL,
+        "contents": [{"role": "user", "parts": [{"text": prompt}]}]
+    }
+    try:
+        response = requests.post(url, headers=headers, data=json.dumps(payload), timeout=300)
+        response.raise_for_status()
+        result = response.json()
+        doc_type = result["candidates"][0]["content"]["parts"][0]["text"].strip()
+        return doc_type
+    except Exception as e:
+        return "Other Document"

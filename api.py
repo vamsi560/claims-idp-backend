@@ -167,23 +167,29 @@ def create_fnol(item: schemas.FNOLWorkItemCreate, db: Session = Depends(get_db))
         
         fname_lower = filename.lower()
         text_for_detection = (att_data['extracted_text'] or '') + ' ' + fname_lower
-        
-        if 'claim' in text_for_detection:
-            doc_type = 'Claim Form'
-        elif 'police' in text_for_detection:
-            doc_type = 'Police Report'
-        elif 'loss' in text_for_detection:
-            doc_type = 'Proof of Loss'
-        elif 'invoice' in text_for_detection:
-            doc_type = 'Invoice'
-        elif 'declaration' in text_for_detection:
-            doc_type = 'Declaration'
-        elif 'photo' in text_for_detection or 'image' in text_for_detection:
-            doc_type = 'Photo'
-        elif 'id' in text_for_detection or 'identity' in text_for_detection:
-            doc_type = 'ID Document'
-        else:
-            doc_type = 'Other Document'
+        from llm_client import guess_doc_type
+        try:
+            doc_type = guess_doc_type(text_for_detection)
+            print(f"LLM guessed document type for '{filename}': {doc_type}")
+        except Exception as e:
+            print(f"Guessing based on the keywords in the document '{filename}': {e}")
+            
+            if 'claim' in text_for_detection:
+                doc_type = 'Claim Form'
+            elif 'police' in text_for_detection:
+                doc_type = 'Police Report'
+            elif 'loss' in text_for_detection:
+                doc_type = 'Proof of Loss'
+            elif 'invoice' in text_for_detection:
+                doc_type = 'Invoice'
+            elif 'declaration' in text_for_detection:
+                doc_type = 'Declaration'
+            elif 'photo' in text_for_detection or 'image' in text_for_detection:
+                doc_type = 'Photo'
+            elif 'id' in text_for_detection or 'identity' in text_for_detection:
+                doc_type = 'ID Document'
+            else:
+                doc_type = 'Other Document'
         
         print(f"Uploading attachment '{filename}' to blob storage")
         blob_url = azure_blob.upload_attachment(filename, att_data['file_bytes'])
