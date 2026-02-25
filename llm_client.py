@@ -68,7 +68,7 @@ Return only the JSON object.
         ]
     }
     try:
-        response = requests.post(url, headers=headers, data=json.dumps(payload), timeout=30)
+        response = requests.post(url, headers=headers, data=json.dumps(payload), timeout=300)
         response.raise_for_status()
         result = response.json()
         # Gemini returns the text in a nested structure; extract JSON from the response

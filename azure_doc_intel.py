@@ -11,11 +11,16 @@ key = os.getenv('AZURE_DOC_INTELLIGENCE_KEY')
 client = DocumentIntelligenceClient(endpoint, AzureKeyCredential(key))
 
 def extract_text_from_bytes(file_bytes, mime_type):
-    poller = client.begin_analyze_document(
-        model_id="prebuilt-read",
-        document=file_bytes,
-        content_type=mime_type
-    )
-    result = poller.result()
-    text = "\n".join([page.content for page in result.pages])
-    return text
+    try:
+        poller = client.begin_analyze_document(
+            model_id="prebuilt-read",
+            body=file_bytes,
+            content_type=mime_type
+        )
+        result = poller.result()
+        # text = "\n".join([page.content for page in result.pages])
+        # return text
+        return result.content
+    except Exception as e:
+        print(f"Error extracting text: {str(e)}")
+        return None

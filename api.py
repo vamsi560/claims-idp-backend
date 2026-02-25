@@ -60,10 +60,13 @@ from azure_doc_intel import extract_text_from_bytes
 
 @router.post("/fnol/", response_model=schemas.FNOLWorkItem)
 def create_fnol(item: schemas.FNOLWorkItemCreate, db: Session = Depends(get_db)):
+    print(f"\n=== create_fnol called with message_id: {item.message_id} ===")
+    
     # Deduplication: check for existing message_id if provided
     if item.message_id:
         existing_item = db.query(models.FNOLWorkItem).filter(models.FNOLWorkItem.message_id == item.message_id).first()
         if existing_item:
+            print(f"Found existing item with id: {existing_item.id}, returning cached result")
             all_attachments = db.query(models.Attachment).filter(models.Attachment.workitem_id == existing_item.id).all()
             attachments_out = [
                 schemas.AttachmentOut(
@@ -82,25 +85,38 @@ def create_fnol(item: schemas.FNOLWorkItemCreate, db: Session = Depends(get_db))
                 status=existing_item.status,
                 attachments=attachments_out
             )
+    else:
+        print("WARNING: No message_id provided - deduplication will not work!")
 
     # Step 1: Extract text from all attachments
     import base64
     extracted_texts = []
     attachment_data = []
+    seen_filenames = set()
     
     if hasattr(item, 'attachments') and item.attachments:
         for att in item.attachments:
             filename = att.get('filename') or att.get('name')
             content = att.get('contentBytes') or att.get('content')
+            
+            # Skip duplicate filenames in the input
+            if filename in seen_filenames:
+                print(f"Skipping duplicate attachment in input: {filename}")
+                continue
+            
+            print(f"Processing attachment: filename={filename}, content_present={bool(content)}")
             if filename and content:
+                seen_filenames.add(filename)
                 file_bytes = base64.b64decode(content)
                 mime_type, _ = mimetypes.guess_type(filename)
                 extracted_text = None
-                
+                print(f"Guessed MIME type for {filename}: {mime_type}")
                 if mime_type in ['image/png', 'image/jpeg', 'image/jpg', 'application/pdf']:
+                    print("entered into mime type processing")
                     try:
                         extracted_text = extract_text_from_bytes(file_bytes, mime_type)
-                    except Exception:
+                    except Exception as e:
+                        print(f"Error extracting text from {filename}: {e}")
                         extracted_text = None
                 
                 if extracted_text:
@@ -112,9 +128,11 @@ def create_fnol(item: schemas.FNOLWorkItemCreate, db: Session = Depends(get_db))
                     'mime_type': mime_type,
                     'extracted_text': extracted_text
                 })
-    
+    # print("attachment_data:", attachment_data)
+
     # Step 2: Pass extracted text to LLM for field extraction
     combined_attachment_text = '\n\n'.join(extracted_texts) if extracted_texts else ''
+    # print("Combined attachment text:", combined_attachment_text)
     if item.extracted_fields is not None:
         extracted_fields = item.extracted_fields
     else:
@@ -130,17 +148,21 @@ def create_fnol(item: schemas.FNOLWorkItemCreate, db: Session = Depends(get_db))
         email_subject=item.subject,
         email_body=item.body,
         extracted_fields=extracted_fields,
-        tag=extracted_fields['claim_type']['category']
+        tag=extracted_fields['claim_type']['category'] if 'claim_type' in extracted_fields else None
     )
     db.add(db_item)
     db.commit()
     db.refresh(db_item)
 
     # Step 4: Store attachments in DB
+    print(f"Storing {len(attachment_data)} attachments for workitem_id={db_item.id}")
+    attachments_added = 0
     for att_data in attachment_data:
         filename = att_data['filename']
+        print(f"Checking if attachment '{filename}' already exists for workitem {db_item.id}")
         existing_attachment = db.query(models.Attachment).filter_by(workitem_id=db_item.id, filename=filename).first()
         if existing_attachment:
+            print(f"Attachment '{filename}' already exists with id={existing_attachment.id}, skipping")
             continue
         
         fname_lower = filename.lower()
@@ -163,7 +185,9 @@ def create_fnol(item: schemas.FNOLWorkItemCreate, db: Session = Depends(get_db))
         else:
             doc_type = 'Other Document'
         
+        print(f"Uploading attachment '{filename}' to blob storage")
         blob_url = azure_blob.upload_attachment(filename, att_data['file_bytes'])
+        print(f"Creating attachment record for '{filename}' with doc_type='{doc_type}'")
         attachment = models.Attachment(
             workitem_id=db_item.id,
             filename=filename,
@@ -171,8 +195,17 @@ def create_fnol(item: schemas.FNOLWorkItemCreate, db: Session = Depends(get_db))
             doc_type=doc_type
         )
         db.add(attachment)
+        attachments_added += 1
+        print(f"Added attachment '{filename}' to session (total added: {attachments_added})")
     
-    db.commit()
+    print(f"Committing {attachments_added} attachments to database")
+    try:
+        db.commit()
+        print("Attachments committed successfully")
+    except Exception as e:
+        print(f"ERROR committing attachments: {e}")
+        db.rollback()
+        raise
     
     # Fetch all attachments for response
     all_attachments = db.query(models.Attachment).filter(models.Attachment.workitem_id == db_item.id).all()
@@ -204,7 +237,7 @@ def list_fnols(db: Session = Depends(get_db)):
     return items
 
 @router.post("/attachments/")
-def upload_attachment(workitem_id: int, file: UploadFile = File(...), db: Session = Depends(get_db)):
+def upload_attachments(workitem_id: int, file: UploadFile = File(...), db: Session = Depends(get_db)):
     blob_url = azure_blob.upload_attachment(file.filename, file.file)
     attachment = models.Attachment(
         workitem_id=workitem_id,
