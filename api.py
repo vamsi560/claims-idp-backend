@@ -379,4 +379,127 @@ def get_tpa_status(fnol_id: int, db: Session = Depends(get_db)):
         "tpa_status": db_item.tpa_status,
         "tpa_pushed_at": db_item.tpa_pushed_at,
         "tpa_last_updated": db_item.tpa_last_updated,
+        "tpa_provider": {
+            "id": db_item.tpa_provider.id,
+            "name": db_item.tpa_provider.name,
+            "code": db_item.tpa_provider.code,
+            "is_mock": db_item.tpa_provider.is_mock,
+        } if db_item.tpa_provider else None,
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# TPA Provider Management Endpoints
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.get("/tpa/providers/")
+def list_tpa_providers(db: Session = Depends(get_db)):
+    """List all TPA providers (dummy and live)."""
+    providers = db.query(models.TPAProvider).filter(models.TPAProvider.is_active == True).all()
+    return [
+        {
+            "id": p.id,
+            "name": p.name,
+            "code": p.code,
+            "contact_email": p.contact_email,
+            "contact_phone": p.contact_phone,
+            "specialties": p.specialties,
+            "is_mock": p.is_mock,
+            "is_active": p.is_active,
+            "claim_count": db.query(models.FNOLWorkItem)
+                             .filter(models.FNOLWorkItem.tpa_provider_id == p.id).count(),
+        }
+        for p in providers
+    ]
+
+
+@router.get("/tpa/providers/{provider_id}/")
+def get_tpa_provider(provider_id: int, db: Session = Depends(get_db)):
+    """Get details for a specific TPA provider."""
+    p = db.query(models.TPAProvider).filter(models.TPAProvider.id == provider_id).first()
+    if not p:
+        raise HTTPException(status_code=404, detail="TPA provider not found.")
+    return {
+        "id": p.id,
+        "name": p.name,
+        "code": p.code,
+        "contact_email": p.contact_email,
+        "contact_phone": p.contact_phone,
+        "specialties": p.specialties,
+        "is_mock": p.is_mock,
+        "is_active": p.is_active,
+        "api_url": p.api_url,
+    }
+
+
+@router.post("/tpa/assign/{fnol_id}/")
+def assign_tpa_to_claim(fnol_id: int, provider_id: int, db: Session = Depends(get_db)):
+    """
+    Assign a TPA provider to an FNOL claim and immediately push the claim to them.
+    If the provider is in mock mode, the push is simulated.
+    """
+    db_item = db.query(models.FNOLWorkItem).filter(models.FNOLWorkItem.id == fnol_id).first()
+    if not db_item:
+        raise HTTPException(status_code=404, detail="FNOL work item not found.")
+
+    provider = db.query(models.TPAProvider).filter(models.TPAProvider.id == provider_id).first()
+    if not provider:
+        raise HTTPException(status_code=404, detail="TPA provider not found.")
+    if not provider.is_active:
+        raise HTTPException(status_code=400, detail=f"TPA provider '{provider.code}' is not active.")
+
+    all_attachments = db.query(models.Attachment).filter(
+        models.Attachment.workitem_id == fnol_id
+    ).all()
+
+    try:
+        tpa_response = tpa_client.push_claim_to_tpa(
+            fnol_id=db_item.id,
+            extracted_fields=db_item.extracted_fields or {},
+            attachments=all_attachments,
+            provider=provider,
+        )
+        db_item.tpa_provider_id = provider.id
+        db_item.tpa_reference_id = tpa_response.get("tpa_reference_id")
+        db_item.tpa_status = tpa_response.get("status")
+        db_item.tpa_pushed_at = datetime.datetime.utcnow()
+        db.commit()
+        return {
+            "success": True,
+            "fnol_id": fnol_id,
+            "provider": provider.name,
+            "provider_code": provider.code,
+            "is_mock": provider.is_mock,
+            "tpa_reference_id": db_item.tpa_reference_id,
+            "tpa_status": db_item.tpa_status,
+            "message": tpa_response.get("message", ""),
+        }
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"TPA push failed: {str(e)}")
+
+
+@router.post("/tpa/simulate-update/{fnol_id}/")
+def simulate_tpa_update(fnol_id: int, db: Session = Depends(get_db)):
+    """
+    DEV/TEST ONLY — Simulate an inbound status update from a mock TPA.
+    Advances the claim to a random realistic TPA status.
+    """
+    db_item = db.query(models.FNOLWorkItem).filter(models.FNOLWorkItem.id == fnol_id).first()
+    if not db_item:
+        raise HTTPException(status_code=404, detail="FNOL work item not found.")
+    if not db_item.tpa_reference_id:
+        raise HTTPException(status_code=400, detail="This claim has not been pushed to a TPA yet.")
+
+    simulated = tpa_client.simulate_status_update(db_item.tpa_reference_id)
+    db_item.status = simulated["status"]
+    db_item.tpa_status = simulated["status"]
+    db_item.tpa_last_updated = datetime.datetime.utcnow()
+    db.commit()
+
+    return {
+        "simulated": True,
+        "fnol_id": fnol_id,
+        "tpa_reference_id": db_item.tpa_reference_id,
+        "new_status": simulated["status"],
+        "notes": simulated.get("notes", ""),
     }
