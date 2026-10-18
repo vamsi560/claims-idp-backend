@@ -19,6 +19,12 @@ class FNOLWorkItem(Base):
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     attachments = relationship('Attachment', back_populates='workitem', cascade='all, delete-orphan')
     tag = Column(Text)
+    # TPA integration fields
+    tpa_reference_id = Column(String, nullable=True, index=True)   # Reference ID returned by TPA
+    tpa_status = Column(String, nullable=True)                      # TPA's own status label
+    tpa_pushed_at = Column(DateTime, nullable=True)                 # Timestamp of last outbound push to TPA
+    tpa_last_updated = Column(DateTime, nullable=True)              # Timestamp of last inbound update from TPA
+
 
 class Attachment(Base):
     __tablename__ = 'attachments'

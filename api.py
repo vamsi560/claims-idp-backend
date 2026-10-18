@@ -2,7 +2,9 @@
 import models
 import schemas
 import database
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+import tpa_client
+import datetime
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Header
 from sqlalchemy import func, case
 from sqlalchemy.orm import Session
 router = APIRouter()
@@ -223,7 +225,23 @@ def create_fnol(item: schemas.FNOLWorkItemCreate, db: Session = Depends(get_db))
             doc_type=a.doc_type
         ) for a in all_attachments
     ]
-    
+
+    # Step 5: Push claim to TPA (non-fatal — FNOL is saved regardless)
+    try:
+        tpa_response = tpa_client.push_claim_to_tpa(
+            fnol_id=db_item.id,
+            extracted_fields=extracted_fields,
+            attachments=all_attachments
+        )
+        db_item.tpa_reference_id = tpa_response.get("tpa_reference_id")
+        db_item.tpa_status = tpa_response.get("status")
+        db_item.tpa_pushed_at = datetime.datetime.utcnow()
+        db.commit()
+        print(f"Claim pushed to TPA. Reference ID: {db_item.tpa_reference_id}")
+    except Exception as tpa_err:
+        print(f"WARNING: TPA push failed for FNOL {db_item.id} — will need retry. Error: {tpa_err}")
+        # Do not raise — FNOL is safely stored, TPA push can be retried via /tpa/retry/{fnol_id}/
+
     return schemas.FNOLWorkItem(
         id=db_item.id,
         message_id=db_item.message_id,
@@ -269,3 +287,96 @@ def update_fnol(fnol_id: int, item: schemas.FNOLWorkItemUpdate, db: Session = De
     db.commit()
     db.refresh(db_item)
     return db_item
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# TPA Endpoints
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.post("/tpa/webhook/")
+def tpa_webhook(
+    payload: schemas.TPAWebhookPayload,
+    db: Session = Depends(get_db),
+    x_tpa_secret: str = Header(default=None, alias="X-TPA-Secret"),
+):
+    """
+    Inbound webhook — called by the TPA when a claim status changes.
+    The TPA must send the shared secret in the X-TPA-Secret header.
+    """
+    # Validate shared secret
+    if not tpa_client.validate_webhook_secret(x_tpa_secret or ""):
+        raise HTTPException(status_code=401, detail="Invalid or missing TPA webhook secret.")
+
+    db_item = db.query(models.FNOLWorkItem).filter(
+        models.FNOLWorkItem.id == int(payload.source_claim_id)
+    ).first()
+
+    if not db_item:
+        raise HTTPException(status_code=404, detail=f"FNOL {payload.source_claim_id} not found.")
+
+    # Update internal status and TPA tracking fields
+    db_item.status = payload.status
+    db_item.tpa_status = payload.status
+    db_item.tpa_reference_id = payload.tpa_reference_id
+    db_item.tpa_last_updated = datetime.datetime.utcnow()
+    db.commit()
+
+    print(f"TPA webhook received for FNOL {payload.source_claim_id}: status={payload.status}, ref={payload.tpa_reference_id}")
+    return {
+        "received": True,
+        "fnol_id": payload.source_claim_id,
+        "new_status": payload.status,
+        "tpa_reference_id": payload.tpa_reference_id,
+    }
+
+
+@router.post("/tpa/retry/{fnol_id}/")
+def retry_tpa_push(fnol_id: int, db: Session = Depends(get_db)):
+    """
+    Manually re-push a claim to TPA — use this if the initial push failed
+    or if TPA requests a resubmission.
+    """
+    db_item = db.query(models.FNOLWorkItem).filter(models.FNOLWorkItem.id == fnol_id).first()
+    if not db_item:
+        raise HTTPException(status_code=404, detail="FNOL work item not found.")
+
+    all_attachments = db.query(models.Attachment).filter(
+        models.Attachment.workitem_id == fnol_id
+    ).all()
+
+    try:
+        tpa_response = tpa_client.push_claim_to_tpa(
+            fnol_id=db_item.id,
+            extracted_fields=db_item.extracted_fields or {},
+            attachments=all_attachments,
+        )
+        db_item.tpa_reference_id = tpa_response.get("tpa_reference_id")
+        db_item.tpa_status = tpa_response.get("status")
+        db_item.tpa_pushed_at = datetime.datetime.utcnow()
+        db.commit()
+        return {
+            "success": True,
+            "fnol_id": fnol_id,
+            "tpa_reference_id": db_item.tpa_reference_id,
+            "tpa_status": db_item.tpa_status,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"TPA push failed: {str(e)}")
+
+
+@router.get("/tpa/status/{fnol_id}/")
+def get_tpa_status(fnol_id: int, db: Session = Depends(get_db)):
+    """
+    Get the current TPA status for a specific FNOL claim.
+    """
+    db_item = db.query(models.FNOLWorkItem).filter(models.FNOLWorkItem.id == fnol_id).first()
+    if not db_item:
+        raise HTTPException(status_code=404, detail="FNOL work item not found.")
+    return {
+        "fnol_id": fnol_id,
+        "internal_status": db_item.status,
+        "tpa_reference_id": db_item.tpa_reference_id,
+        "tpa_status": db_item.tpa_status,
+        "tpa_pushed_at": db_item.tpa_pushed_at,
+        "tpa_last_updated": db_item.tpa_last_updated,
+    }

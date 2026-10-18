@@ -36,6 +36,11 @@ class FNOLWorkItem(BaseModel):
     status: Optional[str] = None
     created_at: Optional[datetime.datetime] = None
     attachments: Optional[list[AttachmentOut]] = []
+    # TPA fields
+    tpa_reference_id: Optional[str] = None
+    tpa_status: Optional[str] = None
+    tpa_pushed_at: Optional[datetime.datetime] = None
+    tpa_last_updated: Optional[datetime.datetime] = None
 
     class Config:
         from_attributes = True
@@ -50,3 +55,13 @@ class AttachmentCreate(BaseModel):
     filename: str
     blob_url: str
     doc_type: Optional[str] = None
+
+# TPA webhook inbound payload schema
+class TPAWebhookPayload(BaseModel):
+    tpa_reference_id: str
+    source_claim_id: str
+    status: str
+    notes: Optional[str] = None
+    adjuster_name: Optional[str] = None
+    adjuster_email: Optional[str] = None
+
