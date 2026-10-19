@@ -11,6 +11,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "https://happy-flower-02c7dc30f.4.azurestaticapps.net",
+        "https://delightful-flower-05bbda40f.4.azurestaticapps.net",
         "https://claims-idp-byhphxaphvexd4ak.eastus-01.azurewebsites.net",
     ],
     allow_credentials=True,
