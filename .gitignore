@@ -1,5 +1,23 @@
 
+# Python
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+env/
+
+# Secrets - NEVER commit these
+.env
+.env.local
+.env.*.local
+
+# Misc
 chunks.pkl
 faiss.index
+*.log
+.DS_Store
