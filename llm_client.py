@@ -47,6 +47,9 @@ loss: dict (loss_date: str, loss_time: str, loss_type: str, cause_of_loss: str, 
 matter: str
 acknowledgment: dict (recipient_name: str, recipient_role: str, delivery_method: str, acknowledgment_sent: bool)
 lawsuit_or_complaint_received: bool
+_field_metadata: dict mapping each extracted field or dotted path (e.g. "summary", "policy.policy_number", "policy.policy_type", "loss.loss_date", "loss.cause_of_loss", "loss.description", "insured.full_name", "claim_type.category", etc.) to an object with:
+  "confidence": float (between 0.0 and 1.0),
+  "source": str (specific document or section, e.g. "Email Subject", "Email Body", "Attachment: Police Report", "Attachment: Claim Form")
 </FIELDS>
 
 If a field is not present, use null or an empty string/list as appropriate. Only use the information in the provided text.
