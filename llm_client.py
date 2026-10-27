@@ -57,27 +57,12 @@ Attachment Text: {attachment_text if attachment_text else ''}
 Return only the JSON object.
 '''
 
-    # Call Gemini LLM API
-    headers = {
-        "Content-Type": "application/json",
-    }
-    url = f"{GEMINI_API_URL}:generateContent?key={GEMINI_API_KEY}"
-    payload = {
-        "model": GEMINI_MODEL,
-        "contents": [
-            {"role": "user", "parts": [{"text": prompt}]}
-        ]
-    }
+    # Call LLM API (Azure OpenAI or Gemini)
     try:
-        response = requests.post(url, headers=headers, data=json.dumps(payload), timeout=300)
-        response.raise_for_status()
-        result = response.json()
-        # Gemini returns the text in a nested structure; extract JSON from the response
-        text = result["candidates"][0]["content"]["parts"][0]["text"]
+        text = _call_llm(prompt)
         # Remove Markdown code block if present
-        if text.strip().startswith('```'):
-            text = text.strip()
-            # Remove the first line (```json or ```) and the last line (```)
+        text = text.strip()
+        if text.startswith('```'):
             lines = text.splitlines()
             if lines[0].startswith('```'):
                 lines = lines[1:]
@@ -88,8 +73,130 @@ Return only the JSON object.
         extracted = json.loads(text)
         return extracted
     except Exception as e:
-        # Fallback: return error info for debugging
-        return {"error": str(e), "llm_response": result if 'result' in locals() else None}
+        # Fallback: return sanitized error info for debugging
+        return {"error": f"Field extraction failed: {type(e).__name__} - {str(e)}"}
+
+
+def _call_azure_openai(prompt: str, max_retries: int = 3) -> str:
+    """
+    Calls Azure OpenAI endpoint (supporting /openai/responses preview and standard endpoints)
+    with automatic exponential backoff retry.
+    """
+    import time
+    url = os.getenv("AZURE_OPENAI_ENDPOINT") or "https://code-suggestion-ai-model.openai.azure.com/openai/responses?api-version=2025-04-01-preview"
+    key = os.getenv("AZURE_OPENAI_KEY", "")
+    deployment = os.getenv("AZURE_OPENAI_DEPLOYMENT", "gpt-5.4-mini")
+
+    headers = {
+        "api-key": key,
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "model": deployment,
+        "input": prompt
+    }
+
+    last_error_msg = ""
+    for attempt in range(1, max_retries + 1):
+        try:
+            response = requests.post(url, headers=headers, json=payload, timeout=120)
+            if response.status_code in (429, 500, 502, 503, 504):
+                last_error_msg = f"HTTP {response.status_code} from Azure OpenAI"
+                if attempt < max_retries:
+                    time.sleep(2 ** attempt)
+                    continue
+
+            response.raise_for_status()
+            result = response.json()
+            # Azure /openai/responses format
+            if "output" in result and result["output"]:
+                content = result["output"][0].get("content", [])
+                if content and "text" in content[0]:
+                    return content[0]["text"]
+            # Fallback for standard /chat/completions format
+            if "choices" in result and result["choices"]:
+                return result["choices"][0]["message"]["content"]
+            raise ValueError(f"Unexpected response structure from Azure OpenAI: {result}")
+        except requests.exceptions.RequestException as req_err:
+            status_code = getattr(getattr(req_err, "response", None), "status_code", None)
+            last_error_msg = f"Request error (HTTP {status_code})" if status_code else "Connection error to Azure OpenAI"
+            if attempt < max_retries and (status_code in (429, 500, 502, 503, 504) or status_code is None):
+                time.sleep(2 ** attempt)
+                continue
+            raise RuntimeError(last_error_msg)
+
+    raise RuntimeError(last_error_msg or "Azure OpenAI request failed after retries")
+
+
+def _call_gemini(prompt: str, max_retries: int = 3) -> str:
+    """
+    Helper function to send a prompt to the Gemini API with:
+    1. Secure authentication via 'x-goog-api-key' header (preventing key leakage in URLs/errors).
+    2. Exponential backoff retry logic for transient errors (503, 500, 502, 429).
+    3. Masked error reporting.
+    """
+    import time
+    api_url = os.getenv("GEMINI_API_URL") or "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash"
+    api_key = os.getenv("GEMINI_API_KEY", "")
+    model = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
+
+    # Strip query parameters (?key=...) from GEMINI_API_URL to prevent key leakage in URLs/logs
+    base_url = api_url.split("?")[0].rstrip("/")
+    if not base_url.endswith(":generateContent"):
+        url = f"{base_url}:generateContent"
+    else:
+        url = base_url
+
+    headers = {
+        "Content-Type": "application/json",
+        "x-goog-api-key": api_key,
+    }
+    payload = {
+        "model": model,
+        "contents": [
+            {"role": "user", "parts": [{"text": prompt}]}
+        ]
+    }
+
+    last_error_msg = ""
+    for attempt in range(1, max_retries + 1):
+        try:
+            response = requests.post(url, headers=headers, json=payload, timeout=120)
+            if response.status_code in (429, 500, 502, 503, 504):
+                last_error_msg = f"HTTP {response.status_code} from Gemini service"
+                if attempt < max_retries:
+                    sleep_secs = 2 ** attempt
+                    time.sleep(sleep_secs)
+                    continue
+
+            response.raise_for_status()
+            result = response.json()
+            return result["candidates"][0]["content"]["parts"][0]["text"]
+        except requests.exceptions.RequestException as req_err:
+            status_code = getattr(getattr(req_err, "response", None), "status_code", None)
+            last_error_msg = f"Request error (HTTP {status_code})" if status_code else "Connection error to Gemini service"
+            if attempt < max_retries and (status_code in (429, 500, 502, 503, 504) or status_code is None):
+                time.sleep(2 ** attempt)
+                continue
+            raise RuntimeError(last_error_msg)
+        except (KeyError, IndexError) as parse_err:
+            raise ValueError(f"Unexpected response structure from Gemini API: {parse_err}")
+
+    raise RuntimeError(last_error_msg or "Gemini API request failed after retries")
+
+
+def _call_llm(prompt: str) -> str:
+    """
+    Routes prompt to configured LLM provider:
+    Defaults to Azure OpenAI if AZURE_OPENAI_KEY is provided or LLM_PROVIDER is set to azure_openai.
+    """
+    provider = (os.getenv("LLM_PROVIDER") or "").strip().lower()
+    if provider == "gemini":
+        return _call_gemini(prompt)
+    if provider == "azure_openai" or os.getenv("AZURE_OPENAI_KEY"):
+        return _call_azure_openai(prompt)
+    return _call_gemini(prompt)
+
 
 
 def guess_doc_type(data: str):
@@ -134,17 +241,8 @@ def guess_doc_type(data: str):
     Output:
     """
 
-    headers = {"Content-Type": "application/json"}
-    url = f"{GEMINI_API_URL}:generateContent?key={GEMINI_API_KEY}"
-    payload = {
-        "model": GEMINI_MODEL,
-        "contents": [{"role": "user", "parts": [{"text": prompt}]}]
-    }
     try:
-        response = requests.post(url, headers=headers, data=json.dumps(payload), timeout=300)
-        response.raise_for_status()
-        result = response.json()
-        doc_type = result["candidates"][0]["content"]["parts"][0]["text"].strip()
+        doc_type = _call_llm(prompt).strip()
         return doc_type
     except Exception as e:
-        return "Other Document"
+        return "Other Document"

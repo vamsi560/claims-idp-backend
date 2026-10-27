@@ -289,6 +289,33 @@ def update_fnol(fnol_id: int, item: schemas.FNOLWorkItemUpdate, db: Session = De
     return db_item
 
 
+@router.post("/fnol/{fnol_id}/re-extract/")
+def re_extract_fnol(fnol_id: int, db: Session = Depends(get_db)):
+    """
+    Re-runs LLM extraction on an existing FNOL work item.
+    Useful when a previous extraction failed due to a transient LLM error.
+    """
+    db_item = db.query(models.FNOLWorkItem).filter(models.FNOLWorkItem.id == fnol_id).first()
+    if not db_item:
+        raise HTTPException(status_code=404, detail="FNOL work item not found")
+
+    extracted_fields = llm_client.extract_fields_from_email(
+        db_item.email_subject or "",
+        db_item.email_body or ""
+    )
+
+    if isinstance(extracted_fields, dict) and "error" in extracted_fields:
+        raise HTTPException(status_code=502, detail=extracted_fields["error"])
+
+    db_item.extracted_fields = extracted_fields
+    if isinstance(extracted_fields, dict) and 'claim_type' in extracted_fields and isinstance(extracted_fields['claim_type'], dict):
+        db_item.tag = extracted_fields['claim_type'].get('category')
+    db.commit()
+    db.refresh(db_item)
+    return db_item
+
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # TPA Endpoints
 # ─────────────────────────────────────────────────────────────────────────────
